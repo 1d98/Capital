@@ -1,0 +1,51 @@
+import { useMemo, useState, type FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
+import { ArrowDownToLine, ArrowRight, Building2, CalendarClock, CheckCircle2, CreditCard, MoreHorizontal, Plus, Search, SlidersHorizontal } from 'lucide-react'
+import { AssetIcon, Change, Modal, SectionTitle } from '../components/UI'
+import { AssetForm, LiabilityForm, NumberField } from '../components/Forms'
+import { money, numberValue, currency, displayAmount } from '../utils'
+import { buildPaymentSchedule } from '../schedule'
+import { usePortfolio } from '../usePortfolio'
+import type { Asset, Liability } from '../types'
+
+export function AssetsPage({ filter, query, onFilterChange, onQueryChange }: { filter: string; query: string; onFilterChange: (filter: string) => void; onQueryChange: (query: string) => void }) {
+  const { t } = useTranslation()
+  const { state, exportCsv, reset } = usePortfolio()
+  const [editing, setEditing] = useState<Asset | null | 'new'>(null)
+  if (!state) return null
+  const filters = ['all', 'property', 'deposit', 'investment', 'cash', 'vehicle', 'crypto', 'other']
+  const filtered = state.assets.filter(asset => (filter === 'all' || asset.category === filter) && `${asset.name} ${asset.institution}`.toLowerCase().includes(query.toLowerCase()))
+  return <>
+    <header className="page-header"><div><div className="eyebrow">{t('assets.eyebrow')}</div><h1>{t('assets.title')}</h1><p>{t('assets.subtitle')}</p></div><button className="primary-button" onClick={() => setEditing('new')}><Plus size={17} />{t('common.addAsset')}</button></header>
+    <section className="portfolio-total panel"><div><span>{t('assets.total')}</span><strong>{money(state.metrics.assets)} <small>{currency()}</small></strong><div className="summary-bottom"><span>{t('overview.netWorth')}: {money(state.metrics.netWorth)} {currency()}</span></div></div><div className="portfolio-stats"><div><span>{t('assets.count')}</span><strong>{state.assets.length}</strong></div><div><span>{t('assets.foreign')}</span><strong>{numberValue(state.metrics.foreignShare, 1)}%</strong></div><div><span>{t('assets.liquid')}</span><strong>{money(state.metrics.liquid)} <small>{currency()}</small></strong></div></div></section>
+    <div className="toolbar"><div className="filter-tabs">{filters.map(item => <button className={filter === item ? 'active' : ''} key={item} onClick={() => onFilterChange(item)}>{t(item === 'all' ? 'common.allAssets' : `categories.${item}`)}</button>)}</div><div className="toolbar-actions"><label className="search-field"><Search size={16} /><input value={query} onChange={e => onQueryChange(e.target.value)} placeholder={t('assets.search')} /></label><button className="icon-button bordered" onClick={() => { onFilterChange('all'); onQueryChange('') }} aria-label={t('settings.reset')}><SlidersHorizontal size={17} /></button></div></div>
+    <section className="panel table-panel"><div className="table-header"><span>{t('assets.asset')}</span><span>{t('assets.category')}</span><span>{t('assets.value')}</span><span>{t('assets.change')}</span><span /></div>{filtered.map(asset => <div className="table-row" key={asset.id}><div className="table-asset"><div className="asset-icon"><AssetIcon type={asset.icon} /></div><div><strong>{asset.name}</strong><span>{asset.institution}</span></div></div><div><span className="category-tag">{t(`categories.${asset.category}`)}</span></div><div className="table-value"><strong>{money(asset.bynValue)} {currency()}</strong><span>{displayAmount(asset.value)} {asset.currency}</span></div><div><Change value={asset.expected_return} /></div><button className="icon-button" onClick={() => setEditing(asset)} aria-label={t('fields.editAsset')}><MoreHorizontal size={18} /></button></div>)}{filtered.length === 0 && <div className="empty-state"><strong>{t('fields.empty')}</strong><p>{t('fields.emptyText')}</p>{!state.assets.length && <button className="secondary-button" onClick={() => reset(true)}>{t('data.demoMode')}</button>}</div>}<div className="table-footer"><span>{state.lastSync ? new Date(state.lastSync).toLocaleString() : t('fields.offline')}</span><button className="text-link" onClick={exportCsv}><ArrowDownToLine size={14} />{t('assets.export')}</button></div></section>
+    {editing && <AssetForm asset={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
+  </>
+}
+
+export function LiabilitiesPage() {
+  const { t, i18n } = useTranslation()
+  const { state, payLiability } = usePortfolio()
+  const [editing, setEditing] = useState<Liability | null | 'new'>(null)
+  const [schedule, setSchedule] = useState<Liability | null>(null)
+  const [payment, setPayment] = useState<Liability | null>(null)
+  const [amount, setAmount] = useState(0)
+  const scheduleRows = useMemo(() => schedule ? buildPaymentSchedule(schedule) : [], [schedule])
+  if (!state) return null
+  const activeLiabilities = state.liabilities.filter(item => item.balance > 0)
+  const monthly = activeLiabilities.reduce((sum, item) => sum + item.monthly_payment, 0)
+  const next = activeLiabilities.filter(item => item.next_payment_date).sort((a, b) => a.next_payment_date.localeCompare(b.next_payment_date))[0]
+  const submitPayment = async (event: FormEvent) => { event.preventDefault(); if (payment) await payLiability(payment.id, amount); setPayment(null) }
+  return <>
+    <header className="page-header"><div><div className="eyebrow">{t('liabilities.eyebrow')}</div><h1>{t('liabilities.title')}</h1><p>{t('liabilities.subtitle')}</p></div><button className="primary-button" onClick={() => setEditing('new')}><Plus size={17} />{t('liabilities.add')}</button></header>
+    <section className="liability-summary"><article className="panel"><span>{t('liabilities.debt')}</span><strong>{money(state.metrics.liabilities)} <small>{currency()}</small></strong></article><article className="panel"><span>{t('liabilities.payments')}</span><strong>{money(monthly)} <small>{currency()}</small></strong><p>{next ? `${t('liabilities.next')}: ${new Date(`${next.next_payment_date}T12:00:00`).toLocaleDateString(i18n.language)}` : t('fields.noPayments')}</p></article><article className="panel debt-ratio"><span>{t('liabilities.ratio')}</span><strong>{numberValue(state.metrics.debtShare, 1)}%</strong><p>{t('liabilities.comfortable')}</p><div className="health-bar"><i style={{ width: `${Math.min(100, state.metrics.debtShare)}%` }} /></div></article></section>
+    <SectionTitle title={t('liabilities.yourLoans')} />
+    <div className="liabilities-list">{state.liabilities.map((item, index) => <article className="panel loan-card" key={item.id}><div className="loan-top"><div className={`loan-icon ${index ? 'warm' : ''}`}>{index ? <CreditCard size={23} /> : <Building2 size={23} />}</div><div className="loan-title"><h3>{item.name}</h3><p>{item.institution}</p></div><button className="icon-button" onClick={() => setEditing(item)} aria-label={t('fields.editLoan')}><MoreHorizontal size={20} /></button></div><div className="loan-amount"><span>{t('liabilities.remaining')}</span><strong>{money(item.balance)} <small>{currency()}</small></strong><span>{money(item.principal)} {currency()}</span></div><div className="loan-progress"><i style={{ width: `${(1 - item.balance / item.principal) * 100}%` }} /></div><div className="loan-details"><div><span>{t('liabilities.rate')}</span><strong>{item.interest_rate.toLocaleString(i18n.language)}%</strong></div><div><span>{t('liabilities.monthly')}</span><strong>{money(item.monthly_payment)} {currency()}</strong></div><div><span>{t('liabilities.repayment')}</span><strong>{item.end_date ? new Date(`${item.end_date}T12:00:00`).toLocaleDateString(i18n.language) : '—'}</strong></div></div><div className="loan-footer"><button className="text-link" disabled={!item.balance} onClick={() => { setAmount(item.monthly_payment || item.balance); setPayment(item) }}><CheckCircle2 size={15} />{t('fields.makePayment')}</button><button className="text-link" onClick={() => setSchedule({ ...item, next_payment_date: item.next_payment_date || item.end_date || new Date().toISOString().slice(0, 10) })}>{t('liabilities.schedule')} <ArrowRight size={14} /></button></div></article>)}</div>
+    {!state.liabilities.length && <div className="empty-state panel">{t('fields.emptyText')}</div>}
+    {next && <article className="next-payment panel"><div className="next-payment-icon"><CalendarClock size={23} /></div><div><h3>{t('liabilities.next')}</h3><p>{next.name} · {next.institution}</p></div><div className="payment-date"><span>{new Date(`${next.next_payment_date}T12:00:00`).toLocaleDateString(i18n.language)}</span></div><strong>{money(next.monthly_payment)} {currency()}</strong><button className="secondary-button" onClick={() => { setAmount(next.monthly_payment); setPayment(next) }}>{t('liabilities.paid')}</button></article>}
+    {editing && <LiabilityForm liability={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
+    {payment && <Modal title={t('fields.makePayment')} subtitle={payment.name} onClose={() => setPayment(null)}><form onSubmit={submitPayment}><div className="form-field"><label htmlFor="payment-amount">{t('fields.payment')}</label><NumberField id="payment-amount" min={0.01} value={amount} onChange={setAmount} required autoFocus /></div><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setPayment(null)}>{t('common.cancel')}</button><button className="primary-button" type="submit">{t('liabilities.paid')}</button></div></form></Modal>}
+    {schedule && <Modal title={t('fields.scheduleTitle')} subtitle={schedule.name} onClose={() => setSchedule(null)}><div className="schedule-table"><div className="schedule-head"><span>{t('fields.paymentDate')}</span><span>{t('fields.payment')}</span><span>{t('fields.interest')}</span><span>{t('fields.remainingDebt')}</span></div>{scheduleRows.map((row, index) => <div className="schedule-row" key={index}><span>{row.date.toLocaleDateString(i18n.language)}</span><strong>{money(row.payment, 2)} {currency()}</strong><span>{money(row.interest, 2)} {currency()}</span><strong>{money(row.balance, 2)} {currency()}</strong></div>)}</div>{!scheduleRows.length && <p className="schedule-empty">{t('fields.noPayments')}</p>}</Modal>}
+  </>
+}
