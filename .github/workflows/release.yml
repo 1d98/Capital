@@ -42,7 +42,7 @@ jobs:
       - name: Test
         run: npm test
       - name: Build packages
-        run: npm run dist -- --${{ matrix.target }} --${{ matrix.arch }}
+        run: npm run dist -- --${{ matrix.target }} --${{ matrix.arch }} --publish never
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
