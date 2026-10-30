@@ -2,6 +2,7 @@
   "name": "capital",
   "productName": "Capital",
   "private": true,
+  "license": "MIT",
   "version": "1.0.1",
   "description": "Локальный учёт и аналитика личного капитала",
   "author": "Capital",
