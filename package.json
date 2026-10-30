@@ -2,7 +2,7 @@
   "name": "capital",
   "productName": "Capital",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Локальный учёт и аналитика личного капитала",
   "author": "Capital",
   "type": "module",
@@ -81,7 +81,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
